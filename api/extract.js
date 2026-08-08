@@ -9,18 +9,26 @@ module.exports = async (req, res) => {
 
     const { type, id, s = 1, e = 1 } = req.query;
     try {
+        // نستخدم vidsrc.to كمصدر أساسي لأنه الأسرع والأكثر استقراراً الآن
         const embedUrl = type === 'movie' 
-            ? `https://vidsrc.me/embed/movie/${id}` 
-            : `https://vidsrc.me/embed/tv/${id}/${s}/${e}`;
+            ? `https://vidsrc.to/embed/movie/${id}` 
+            : `https://vidsrc.to/embed/tv/${id}/${s}/${e}`;
 
         const response = await axios.get(embedUrl, {
-            headers: { 'User-Agent': 'Mozilla/5.0' },
-            timeout: 4000 // مهلة قصيرة جداً لضمان السرعة
+            headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
+            timeout: 4000
         });
         
         const $ = cheerio.load(response.data);
-        const hash = $('div.server[data-name="VidSrc PRO"]').attr('data-hash') || $('div.server').first().attr('data-hash');
         
+        // محاولة استخراج الرابط المباشر من iframe (بنية vidsrc الجديدة)
+        const iframeSrc = $('iframe#player_iframe').attr('src');
+        if (iframeSrc && iframeSrc.startsWith('http')) {
+            return res.status(200).json({ success: true, url: iframeSrc });
+        }
+
+        // محاولة الاستخراج بالطريقة القديمة (data-hash) إذا كانت لا تزال موجودة
+        const hash = $('div.server[data-name="VidSrc PRO"]').attr('data-hash') || $('div.server').first().attr('data-hash');
         if (hash) {
             const rcpUrl = `https://vidsrc.stream/rcp/${hash}`;
             const rcpRes = await axios.get(rcpUrl, { headers: { 'Referer': embedUrl }, timeout: 3000 });
@@ -37,9 +45,11 @@ module.exports = async (req, res) => {
                 return res.status(200).json({ success: true, url: decoded.startsWith('//') ? `https:${decoded}` : decoded });
             }
         }
-    } catch (err) {}
+    } catch (err) {
+        console.error("Extraction error:", err.message);
+    }
 
-    // إذا فشل الاستخراج السريع، نرسل رابط الطوارئ فوراً
-    const fallback = `https://vidsrc.xyz/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type === 'tv' ? `/${s}/${e}` : ''}`;
+    // إصلاح الخلل الجذري: تغيير رابط الطوارئ من vidsrc.xyz المحجوب إلى vidsrc.to
+    const fallback = `https://vidsrc.to/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type === 'tv' ? `/${s}/${e}` : ''}`;
     res.status(200).json({ success: true, url: fallback });
 };
