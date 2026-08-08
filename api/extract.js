@@ -18,7 +18,7 @@ module.exports = async (req, res) => {
 
         const response = await axios.get(embedUrl, {
             headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' },
-            timeout: 8000
+            timeout: 5000
         });
         
         const $ = cheerio.load(response.data);
@@ -41,11 +41,9 @@ module.exports = async (req, res) => {
                 return res.status(200).json({ success: true, url: finalUrl });
             }
         }
-    } catch (err) {
-        // إذا فشل كل شيء، نستخدم مشغل الطوارئ لضمان استمرار العمل
-        const emergencyUrl = `https://vidsrc.xyz/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type === 'tv' ? `/${s}/${e}` : ''}`;
-        return res.status(200).json({ success: true, url: emergencyUrl });
-    }
-    
-    res.status(500).json({ success: false, error: 'Extraction failed' });
+    } catch (err) {}
+
+    // Fallback: إذا فشل الاستخراج، نعيد رابط الـ embed المباشر ليعمل كمشغل طوارئ
+    const fallback = `https://vidsrc.xyz/embed/${type === 'movie' ? 'movie' : 'tv'}/${id}${type === 'tv' ? `/${s}/${e}` : ''}`;
+    res.status(200).json({ success: true, url: fallback });
 };
